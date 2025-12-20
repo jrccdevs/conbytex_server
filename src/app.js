@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
+require('dotenv').config({ path: '../.env' });
+
 
 const FRONTEND_URL = process.env.FRONTEND_URL;
 // 🔹 Middleware

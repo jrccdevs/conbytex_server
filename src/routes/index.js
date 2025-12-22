@@ -15,7 +15,7 @@ router.use("/recetas", require("./receta.routes"));
 router.use("/ordenes", require("./orden.routes"));
 router.use("/orden-consumo", require("./orden_consumo.routes"));
 router.use("/movimientos", require("./movimiento.routes"));
-
+router.use("/inventario", require("./inventario.routes"));
 
 
 

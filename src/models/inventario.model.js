@@ -1,4 +1,4 @@
-const db = require("../config/db"); // Ajusta según tu configuración de conexión
+const db = require("../config/db");
 
 const Inventario = {
     obtenerStockPorAlmacen: async (id_almacen) => {
@@ -6,6 +6,7 @@ const Inventario = {
             SELECT 
                 p.id_producto,
                 p.nombre_producto,
+                p.tipo_producto, -- Campo identificado
                 SUM(
                     CASE 
                         WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
@@ -17,7 +18,7 @@ const Inventario = {
             FROM movimientos_inventario m
             INNER JOIN productos p ON m.id_producto = p.id_producto
             WHERE m.id_almacen = ?
-            GROUP BY p.id_producto, p.nombre_producto
+            GROUP BY p.id_producto, p.nombre_producto, p.tipo_producto
         `;
         const [rows] = await db.query(sql, [id_almacen]);
         return rows;

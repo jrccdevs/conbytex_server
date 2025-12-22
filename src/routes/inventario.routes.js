@@ -1,9 +1,10 @@
-import express from 'express';
-import { listarStockAlmacen } from '../controllers/inventario.controller.js';
+const { Router } = require("express");
+const router = Router();
+const inventarioController = require("../controllers/inventario.controller");
+const auth = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
 
-const router = express.Router();
+// Solo lectura: Permitido para empleados y admin previa autenticación
+router.get("/almacen/:id_almacen", auth, inventarioController.listarStockAlmacen);
 
-// GET /api/inventario/almacen/:id_almacen
-router.get('/almacen/:id_almacen', listarStockAlmacen);
-
-export default router;
+module.exports = router;

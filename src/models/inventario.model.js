@@ -1,7 +1,6 @@
-import db from '../config/db.js';
+const db = require("../config/db"); // Ajusta según tu configuración de conexión
 
 const Inventario = {
-    // Calculamos el stock neto sumando ingresos y restando salidas/ajustes
     obtenerStockPorAlmacen: async (id_almacen) => {
         const sql = `
             SELECT 
@@ -25,4 +24,4 @@ const Inventario = {
     }
 };
 
-export default Inventario;
+module.exports = Inventario;

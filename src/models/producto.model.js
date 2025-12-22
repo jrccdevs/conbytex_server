@@ -42,17 +42,27 @@ const Producto = {
       id_talla,
       id_color,
       id_unidadmedida,
+      stock_minimo, // Nuevo campo
       activo
     } = data;
 
     const [result] = await db.query(
       `INSERT INTO productos 
-      (nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, activo ?? 1]
+      (nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, stock, stock_minimo, activo)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`, // El stock nace en 0 estrictamente
+      [
+        nombre_producto, 
+        tipo_producto, 
+        id_material, 
+        id_talla, 
+        id_color, 
+        id_unidadmedida, 
+        stock_minimo ?? 0, 
+        activo ?? 1
+      ]
     );
 
-    return { id_producto: result.insertId, ...data };
+    return { id_producto: result.insertId, ...data, stock: 0 };
   },
 
   update: async (id, data) => {
@@ -63,6 +73,7 @@ const Producto = {
       id_talla,
       id_color,
       id_unidadmedida,
+      stock_minimo, // Nuevo campo
       activo
     } = data;
 
@@ -74,9 +85,20 @@ const Producto = {
         id_talla = ?, 
         id_color = ?, 
         id_unidadmedida = ?, 
+        stock_minimo = ?,
         activo = ?
        WHERE id_producto = ?`,
-      [nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, activo, id]
+      [
+        nombre_producto, 
+        tipo_producto, 
+        id_material, 
+        id_talla, 
+        id_color, 
+        id_unidadmedida, 
+        stock_minimo, 
+        activo, 
+        id
+      ]
     );
 
     return { id_producto: id, ...data };

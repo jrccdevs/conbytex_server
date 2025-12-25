@@ -8,8 +8,10 @@ const Inventario = {
                 p.nombre_producto,
                 p.tipo_producto,
                 u.nombre_unidad,
-                p.stock_reservado,
-                -- El stock actual viene de la suma de movimientos
+                -- Aseguramos que se use el campo stock_reservado de tu tabla
+                IFNULL(p.stock_reservado, 0) AS stock_reservado,
+                
+                -- El stock_fisico calculado según tu lógica de movimientos
                 IFNULL(SUM(
                     CASE 
                         WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
@@ -18,7 +20,8 @@ const Inventario = {
                         ELSE 0 
                     END
                 ), 0) AS stock_fisico,
-                -- El disponible es lo físico menos lo comprometido en órdenes "en proceso"
+
+                -- El disponible: (Suma de movimientos) - (stock_reservado de la tabla productos)
                 (IFNULL(SUM(
                     CASE 
                         WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
@@ -26,12 +29,18 @@ const Inventario = {
                         WHEN m.tipo_movimiento = 'ajuste' THEN m.cantidad 
                         ELSE 0 
                     END
-                ), 0) - p.stock_reservado) AS stock_disponible
+                ), 0) - IFNULL(p.stock_reservado, 0)) AS stock_disponible
             FROM productos p
             LEFT JOIN unidadesmedida u ON p.id_unidadmedida = u.id_unidad 
+            -- Mantenemos el filtro por id_almacen para los movimientos
             LEFT JOIN movimientos_inventario m ON p.id_producto = m.id_producto AND m.id_almacen = ?
             WHERE p.activo = 1
-            GROUP BY p.id_producto, p.nombre_producto, p.tipo_producto, u.nombre_unidad, p.stock_reservado
+            GROUP BY 
+                p.id_producto, 
+                p.nombre_producto, 
+                p.tipo_producto, 
+                u.nombre_unidad, 
+                p.stock_reservado
         `;
         
         const [rows] = await db.query(sql, [id_almacen]);

@@ -1,33 +1,32 @@
 const Orden = require("../models/orden.model");
-
 const Receta = require("../models/receta.model");
-const db = require("../config/db"); // Importamos db para usar transacciones
+const db = require("../config/db"); // Para usar transacciones
+
 exports.updateOrden = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
     const id_orden = req.params.id;
     const estadoNuevo = estado.trim().toLowerCase();
+    const cantidad = Number(cantidad_solicitada);
 
     await connection.beginTransaction();
 
+    // Obtener estado anterior de la orden
     const ordenAnterior = await Orden.getRawById(id_orden, connection);
     if (!ordenAnterior) throw new Error("Orden no encontrada");
-
     const estadoAnterior = ordenAnterior.estado;
-    const cantidad = cantidad_solicitada;
 
-    // 1️⃣ Actualizar estado
+    // Actualizar orden
     await Orden.update(
       id_orden,
-      { id_producto, id_empleado, cantidad_solicitada, estado: estadoNuevo },
+      { id_producto, id_empleado, cantidad_solicitada: cantidad, estado: estadoNuevo },
       connection
     );
 
-    // 2️⃣ TRANSICIONES
+    // 1️⃣ De pendiente a en_proceso: reservar stock
     if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
       const insumos = await Receta.getByProducto(id_producto, connection);
-
       for (const item of insumos) {
         const totalReserva = item.cantidad * cantidad;
 
@@ -38,7 +37,7 @@ exports.updateOrden = async (req, res) => {
 
         const disponible = prod.stock - prod.stock_reservado;
         if (disponible < totalReserva) {
-          throw new Error(`Stock insuficiente para MP ${item.id_producto_material}`);
+          throw new Error(`Stock insuficiente para materia prima ${item.id_producto_material}`);
         }
 
         await connection.query(
@@ -48,8 +47,9 @@ exports.updateOrden = async (req, res) => {
       }
     }
 
-    else if (estadoAnterior === "en_proceso" && estadoNuevo === "completada") {
-      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+    // 2️⃣ De en_proceso a finalizado: descontar stock y liberar stock_reservado
+    if (estadoAnterior === "en_proceso" && estadoNuevo === "finalizado") {
+      const insumos = await Receta.getByProducto(id_producto, connection);
       for (const item of insumos) {
         const total = item.cantidad * cantidad;
         await connection.query(
@@ -57,11 +57,6 @@ exports.updateOrden = async (req, res) => {
           [total, total, item.id_producto_material]
         );
       }
-
-      await connection.query(
-        "UPDATE productos SET stock = stock + ? WHERE id_producto = ?",
-        [cantidad, id_producto]
-      );
     }
 
     await connection.commit();
@@ -74,6 +69,7 @@ exports.updateOrden = async (req, res) => {
     connection.release();
   }
 };
+
 exports.getOrdenes = async (req, res) => {
   try {
     const ordenes = await Orden.getAll();
@@ -105,8 +101,6 @@ exports.createOrden = async (req, res) => {
     res.status(500).json({ message: "Error al crear la orden", error });
   }
 };
-
-
 
 exports.deleteOrden = async (req, res) => {
   try {

@@ -49,7 +49,7 @@ exports.updateOrden = async (req, res) => {
 
     // 2️⃣ De en_proceso a finalizado: descontar stock y liberar stock_reservado
     if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
-      const insumos = await Receta.getByProducto(id_producto, connection);
+      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
       for (const item of insumos) {
         const total = item.cantidad * cantidad;
         await connection.query(

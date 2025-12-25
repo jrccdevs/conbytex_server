@@ -5,82 +5,75 @@ const db = require("../config/db"); // Importamos db para usar transacciones
 exports.updateOrden = async (req, res) => {
   const connection = await db.getConnection();
   try {
-      const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
-      const id_orden = req.params.id;
+    const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
+    const id_orden = req.params.id;
+    const estadoNuevo = estado.trim().toLowerCase();
 
-      const ordenAnterior = await Orden.getById(id_orden);
-      if (!ordenAnterior) return res.status(404).json({ message: "Orden no encontrada" });
+    await connection.beginTransaction();
 
-      const estadoAnterior = ordenAnterior.estado;
-      const cantidad = cantidad_solicitada;
+    const ordenAnterior = await Orden.getRawById(id_orden, connection);
+    if (!ordenAnterior) throw new Error("Orden no encontrada");
 
-      await connection.beginTransaction();
+    const estadoAnterior = ordenAnterior.estado;
+    const cantidad = cantidad_solicitada;
 
-      // --- LÓGICA DE TRANSICIÓN: PENDIENTE -> EN PROCESO ---
-      if (estadoAnterior === 'pendiente' && estado === 'en proceso') {
-          const insumos = await Receta.getByProducto(id_producto);
-          
-          for (const item of insumos) {
-              const totalReserva = item.cantidad * cantidad;
-              
-              // 1. Consultar usando tus nombres de columna exactos: stock y stock_reservado
-              const [prod] = await connection.query(
-                  "SELECT stock, stock_reservado FROM productos WHERE id_producto = ?", 
-                  [item.id_producto_material]
-              );
-
-              if (prod.length === 0) throw new Error(`El material con ID ${item.id_producto_material} no existe.`);
-
-              // 2. Manejar posibles valores NULL con || 0
-              const stockFisico = parseFloat(prod[0].stock) || 0;
-              const reservadoActual = parseFloat(prod[0].stock_reservado) || 0;
-              const disponible = stockFisico - reservadoActual;
-
-              if (disponible < totalReserva) {
-                  throw new Error(`Stock insuficiente para material ID ${item.id_producto_material}. Disponible: ${disponible}, Necesario: ${totalReserva}`);
-              }
-
-              // 3. Actualizar la reserva
-              await connection.query(
-                  "UPDATE productos SET stock_reservado = stock_reservado + ? WHERE id_producto = ?",
-                  [totalReserva, item.id_producto_material]
-              );
-          }
-      }
-
-      // --- LÓGICA DE TRANSICIÓN: EN PROCESO -> COMPLETADA ---
-      else if (estadoAnterior === 'en proceso' && estado === 'completada') {
-          const insumos = await Receta.getByProducto(id_producto);
-          for (const item of insumos) {
-              const totalAConsumir = item.cantidad * cantidad;
-              // Restar del stock físico y liberar la reserva
-              await connection.query(
-                  "UPDATE productos SET stock = stock - ?, stock_reservado = stock_reservado - ? WHERE id_producto = ?",
-                  [totalAConsumir, totalAConsumir, item.id_producto_material]
-              );
-          }
-          // Sumar el Producto Terminado resultante al stock
-          await connection.query(
-              "UPDATE productos SET stock = stock + ? WHERE id_producto = ?",
-              [cantidad, id_producto]
-          );
-      }
-      const updatedOrden = await Orden.update(
-        id_orden, 
-        { id_producto, id_empleado, cantidad_solicitada, estado },
-        connection // <--- IMPORTANTE: Pasa la conexión aquí
+    // 1️⃣ Actualizar estado
+    await Orden.update(
+      id_orden,
+      { id_producto, id_empleado, cantidad_solicitada, estado: estadoNuevo },
+      connection
     );
-    
+
+    // 2️⃣ TRANSICIONES
+    if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
+      const insumos = await Receta.getByProducto(id_producto, connection);
+
+      for (const item of insumos) {
+        const totalReserva = item.cantidad * cantidad;
+
+        const [[prod]] = await connection.query(
+          "SELECT stock, stock_reservado FROM productos WHERE id_producto = ?",
+          [item.id_producto_material]
+        );
+
+        const disponible = prod.stock - prod.stock_reservado;
+        if (disponible < totalReserva) {
+          throw new Error(`Stock insuficiente para MP ${item.id_producto_material}`);
+        }
+
+        await connection.query(
+          "UPDATE productos SET stock_reservado = stock_reservado + ? WHERE id_producto = ?",
+          [totalReserva, item.id_producto_material]
+        );
+      }
+    }
+
+    else if (estadoAnterior === "en_proceso" && estadoNuevo === "completada") {
+      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+      for (const item of insumos) {
+        const total = item.cantidad * cantidad;
+        await connection.query(
+          "UPDATE productos SET stock = stock - ?, stock_reservado = stock_reservado - ? WHERE id_producto = ?",
+          [total, total, item.id_producto_material]
+        );
+      }
+
+      await connection.query(
+        "UPDATE productos SET stock = stock + ? WHERE id_producto = ?",
+        [cantidad, id_producto]
+      );
+    }
+
     await connection.commit();
-    res.json({ message: `Orden actualizada a ${estado}`, orden: updatedOrden });
+    res.json({ message: "Orden actualizada correctamente" });
+
   } catch (error) {
-      await connection.rollback();
-      res.status(500).json({ message: error.message || "Error al actualizar", error });
+    await connection.rollback();
+    res.status(500).json({ message: error.message });
   } finally {
-      connection.release();
+    connection.release();
   }
 };
-
 exports.getOrdenes = async (req, res) => {
   try {
     const ordenes = await Orden.getAll();

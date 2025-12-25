@@ -1,6 +1,14 @@
 const db = require("../config/db");
 
 const Orden = {
+
+  getRawById: async (id, connection = db) => {
+    const [rows] = await connection.query(
+      "SELECT * FROM orden_produccion WHERE id_orden = ?",
+      [id]
+    );
+    return rows[0] || null;
+  },
   getAll: async () => {
     const [rows] = await db.query(`
       SELECT o.*, 

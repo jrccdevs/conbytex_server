@@ -1,6 +1,11 @@
 const db = require("../config/db");
 
 const Receta = {
+
+  // =========================
+  // CONSULTAS PARA UI / FRONTEND
+  // =========================
+
   // Listar todas las recetas con nombres básicos
   getAll: async () => {
     const [rows] = await db.query(`
@@ -28,7 +33,7 @@ const Receta = {
     return rows[0];
   },
 
-  // Obtener insumos de un producto (Usado por el controlador para reservas)
+  // Obtener receta por producto (USO UI)
   getByProducto: async (id_producto) => {
     const [rows] = await db.query(`
       SELECT r.*, 
@@ -62,6 +67,27 @@ const Receta = {
     return rows;
   },
 
+  // =========================
+  // CONSULTA PARA PRODUCCIÓN
+  // (ORDENES / INVENTARIO)
+  // =========================
+  // 👉 SOLO para lógica de negocio
+  getInsumosProduccion: async (id_producto, connection = db) => {
+    const [rows] = await connection.query(
+      `SELECT 
+         id_producto_material,
+         cantidad
+       FROM receta
+       WHERE id_producto = ?`,
+      [id_producto]
+    );
+    return rows;
+  },
+
+  // =========================
+  // CRUD
+  // =========================
+
   // Crear nueva entrada en la receta
   create: async (data) => {
     const { id_producto, id_producto_material, cantidad } = data;
@@ -77,7 +103,8 @@ const Receta = {
   update: async (id, data) => {
     const { id_producto, id_producto_material, cantidad } = data;
     await db.query(
-      `UPDATE receta SET id_producto = ?, id_producto_material = ?, cantidad = ?
+      `UPDATE receta 
+       SET id_producto = ?, id_producto_material = ?, cantidad = ?
        WHERE id_receta = ?`,
       [id_producto, id_producto_material, cantidad, id]
     );
@@ -86,7 +113,10 @@ const Receta = {
 
   // Eliminar un material de la receta
   delete: async (id) => {
-    await db.query("DELETE FROM receta WHERE id_receta = ?", [id]);
+    await db.query(
+      "DELETE FROM receta WHERE id_receta = ?",
+      [id]
+    );
     return { message: `Receta con id ${id} eliminada` };
   }
 };

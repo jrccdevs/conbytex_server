@@ -1,7 +1,7 @@
 const db = require("../config/db");
 
 const Receta = {
-  // Listar todas las recetas
+  // Listar todas las recetas con nombres básicos
   getAll: async () => {
     const [rows] = await db.query(`
       SELECT r.*, 
@@ -14,7 +14,7 @@ const Receta = {
     return rows;
   },
 
-  // Obtener receta por ID
+  // Obtener receta por ID individual
   getById: async (id) => {
     const [rows] = await db.query(`
       SELECT r.*, 
@@ -28,7 +28,7 @@ const Receta = {
     return rows[0];
   },
 
-  // Obtener todas las recetas de un producto específico
+  // Obtener insumos de un producto (Usado por el controlador para reservas)
   getByProducto: async (id_producto) => {
     const [rows] = await db.query(`
       SELECT r.*, 
@@ -42,7 +42,27 @@ const Receta = {
     return rows;
   },
 
-  // Crear nueva receta
+  // Obtener receta con detalles técnicos (Color, Material, Unidad)
+  getRecetaCompleta: async (id_producto) => {
+    const [rows] = await db.query(`
+      SELECT r.*, 
+             p.nombre_producto AS producto_terminado,
+             m.nombre_producto AS materia_prima,
+             col.nombre_color,
+             mat.nombre_material,
+             uni.nombre_unidad
+      FROM receta r
+      JOIN productos p ON r.id_producto = p.id_producto
+      JOIN productos m ON r.id_producto_material = m.id_producto
+      LEFT JOIN color col ON m.id_color = col.id_color
+      LEFT JOIN materiales mat ON m.id_material = mat.id_material
+      LEFT JOIN unidadesmedida uni ON m.id_unidadmedida = uni.id_unidad
+      WHERE r.id_producto = ?
+    `, [id_producto]);
+    return rows;
+  },
+
+  // Crear nueva entrada en la receta
   create: async (data) => {
     const { id_producto, id_producto_material, cantidad } = data;
     const [result] = await db.query(
@@ -53,7 +73,7 @@ const Receta = {
     return { id_receta: result.insertId, ...data };
   },
 
-  // Actualizar receta
+  // Actualizar una entrada de la receta
   update: async (id, data) => {
     const { id_producto, id_producto_material, cantidad } = data;
     await db.query(
@@ -64,27 +84,11 @@ const Receta = {
     return { id_receta: id, ...data };
   },
 
-  // Eliminar receta
+  // Eliminar un material de la receta
   delete: async (id) => {
     await db.query("DELETE FROM receta WHERE id_receta = ?", [id]);
     return { message: `Receta con id ${id} eliminada` };
   }
 };
-// En receta.model.js
-Receta.getRecetaCompleta = async (id_producto) => {
-  const [rows] = await db.query(`
-    SELECT r.*, 
-           p.nombre_producto AS producto_terminado,
-           m.nombre_producto AS materia_prima,
-           m.nombre_color,
-           m.nombre_material,
-           m.nombre_unidad
-    FROM receta r
-    JOIN productos p ON r.id_producto = p.id_producto
-    JOIN productos m ON r.id_producto_material = m.id_producto
-    WHERE r.id_producto = ?
-  `, [id_producto]);
 
-  return rows;
-};
 module.exports = Receta;

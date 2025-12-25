@@ -30,7 +30,8 @@ exports.createMovimiento = async (req, res) => {
     const newMovimiento = await Movimiento.create(req.body);
     res.status(201).json({ message: "Movimiento registrado con éxito", movimiento: newMovimiento });
   } catch (error) {
-    res.status(500).json({ message: "Error al registrar el movimiento", error });
+    // Aquí capturamos el mensaje de "Stock insuficiente" o "Cantidad negativa"
+    res.status(400).json({ message: error.message || "Error al registrar" });
   }
 };
 

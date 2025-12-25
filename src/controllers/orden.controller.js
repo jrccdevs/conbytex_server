@@ -65,12 +65,14 @@ exports.updateOrden = async (req, res) => {
               [cantidad, id_producto]
           );
       }
-
-      const updatedOrden = await Orden.update(id_orden, { id_producto, id_empleado, cantidad_solicitada, estado });
-      
-      await connection.commit();
-      res.json({ message: `Orden actualizada a ${estado}`, orden: updatedOrden });
-
+      const updatedOrden = await Orden.update(
+        id_orden, 
+        { id_producto, id_empleado, cantidad_solicitada, estado },
+        connection // <--- IMPORTANTE: Pasa la conexión aquí
+    );
+    
+    await connection.commit();
+    res.json({ message: `Orden actualizada a ${estado}`, orden: updatedOrden });
   } catch (error) {
       await connection.rollback();
       res.status(500).json({ message: error.message || "Error al actualizar", error });

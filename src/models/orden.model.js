@@ -61,17 +61,23 @@ const Orden = {
     return { id_orden: result.insertId, ...data, estado: 'pendiente' };
   },
 
-  update: async (id, data) => {
+  update: async (id, data, connection = null) => {
     const { id_producto, id_empleado, cantidad_solicitada, estado } = data;
-    await db.query(
-      `UPDATE orden_produccion SET 
-        id_producto = ?, 
-        id_empleado = ?, 
-        cantidad_solicitada = ?, 
-        estado = ?
-       WHERE id_orden = ?`,
-      [id_producto, id_empleado, cantidad_solicitada, estado, id]
-    );
+    const sql = `UPDATE orden_produccion SET 
+                 id_producto = ?, 
+                 id_empleado = ?, 
+                 cantidad_solicitada = ?, 
+                 estado = ?
+                 WHERE id_orden = ?`;
+    const params = [id_producto, id_empleado, cantidad_solicitada, estado, id];
+  
+    // Si viene una conexión de una transacción, la usamos. Si no, usamos db.query normal.
+    if (connection) {
+      await connection.query(sql, params);
+    } else {
+      await db.query(sql, params);
+    }
+    
     return { id_orden: id, ...data };
   },
 

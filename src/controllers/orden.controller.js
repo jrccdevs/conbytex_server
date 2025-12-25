@@ -1,5 +1,5 @@
 const Orden = require("../models/orden.model");
-const Orden = require("../models/orden.model");
+
 const Receta = require("../models/receta.model");
 const db = require("../config/db"); // Importamos db para usar transacciones
 

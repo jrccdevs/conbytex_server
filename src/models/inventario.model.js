@@ -7,7 +7,7 @@ const Inventario = {
                 p.id_producto,
                 p.nombre_producto,
                 p.tipo_producto,
-                -- Usamos IFNULL para que si no hay movimientos, el stock sea 0
+                u.nombre_unidad, -- Ajusta este nombre si el campo se llama diferente (ej. unidad)
                 IFNULL(SUM(
                     CASE 
                         WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
@@ -17,12 +17,13 @@ const Inventario = {
                     END
                 ), 0) AS stock_actual
             FROM productos p
-            -- Cambiamos a LEFT JOIN empezando por Productos
-            -- Y añadimos la condición del almacén dentro del ON para no excluir productos
+            -- Unión con tu tabla específica
+            LEFT JOIN unidadesmedida u ON p.id_unidadmedida = u.id_unidad 
             LEFT JOIN movimientos_inventario m ON p.id_producto = m.id_producto AND m.id_almacen = ?
-            WHERE p.activo = 1 -- Opcional: solo mostrar productos activos
-            GROUP BY p.id_producto, p.nombre_producto, p.tipo_producto
+            WHERE p.activo = 1
+            GROUP BY p.id_producto, p.nombre_producto, p.tipo_producto, u.nombre_unidad
         `;
+        
         const [rows] = await db.query(sql, [id_almacen]);
         return rows;
     }

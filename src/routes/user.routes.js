@@ -4,13 +4,13 @@ const userController = require('../controllers/user.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
 
-// Listar todos
+// Listar todos los nodos
 router.get('/', auth, role("admin"), userController.getUsers);
 
-// Actualizar rol por ID
+// Actualizar rol y permisos granulares por ID
 router.put('/:id', auth, role("admin"), userController.updateUser);
 
-// Eliminar por ID
+// Eliminar nodo por ID
 router.delete('/:id', auth, role("admin"), userController.deleteUser);
 
 module.exports = router;

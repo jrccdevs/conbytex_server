@@ -3,25 +3,33 @@ const User = require('../models/user.model');
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.getAllUsers();
-    res.json(users);
+    // Parseamos los permisos de string JSON a objeto JS antes de enviar
+    const usersWithParsedPermissions = users.map(u => ({
+      ...u,
+      permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions
+    }));
+    res.json(usersWithParsedPermissions);
   } catch (error) {
     res.status(500).json({ message: "Error al obtener usuarios", error });
   }
 };
 
-// NUEVO: Actualizar Usuario
+// Actualizar Usuario y sus Permisos granulares
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role } = req.body;
-    await User.updateUserRole(id, role);
-    res.json({ message: "Rol actualizado correctamente" });
+    const { role, permissions } = req.body; 
+    
+    // Si no vienen permisos en el body, mantenemos la lógica básica
+    await User.updateUserRole(id, role, permissions);
+    
+    res.json({ message: "Privilegios actualizados correctamente" });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar usuario", error });
+    res.status(500).json({ message: "Error al actualizar permisos", error });
   }
 };
 
-// NUEVO: Eliminar Usuario
+// Eliminar Usuario
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;

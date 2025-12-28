@@ -2,15 +2,14 @@ const { Router } = require("express");
 const router = Router();
 const sizeController = require("../controllers/size.controller");
 const auth = require("../middlewares/auth.middleware");
-const role = require("../middlewares/role.middleware");
+const { checkPermission } = require("../middlewares/auth.middleware");
 
-// Rutas públicas
-router.get("/", sizeController.getSizes);
-router.get("/:id", sizeController.getSizeById);
+// Rutas protegidas por permisos
+router.get("/", auth, checkPermission("sizes", "view"), sizeController.getSizes);
+router.get("/:id", auth, checkPermission("sizes", "view"), sizeController.getSizeById);
 
-// Rutas protegidas solo para admin
-router.post("/", auth, role("admin"), sizeController.createSize);
-router.put("/:id", auth, role("admin"), sizeController.updateSize);
-router.delete("/:id", auth, role("admin"), sizeController.deleteSize);
+router.post("/", auth, checkPermission("sizes", "create"), sizeController.createSize);
+router.put("/:id", auth, checkPermission("sizes", "edit"), sizeController.updateSize);
+router.delete("/:id", auth, checkPermission("sizes", "delete"), sizeController.deleteSize);
 
 module.exports = router;

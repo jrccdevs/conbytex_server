@@ -2,17 +2,16 @@ const { Router } = require("express");
 const router = Router();
 const recetaController = require("../controllers/receta.controller");
 const auth = require("../middlewares/auth.middleware");
-const role = require("../middlewares/role.middleware");
+const { checkPermission } = require("../middlewares/auth.middleware");
 
-// Rutas públicas
-router.get("/", recetaController.getRecetas);
-router.get("/:id", recetaController.getRecetaById);
-router.get("/producto/:id_producto", recetaController.getRecetasByProducto); // NUEVA RUTA
+// Rutas protegidas por permisos
+router.get("/", auth, checkPermission("recetas", "view"), recetaController.getRecetas);
+router.get("/:id", auth, checkPermission("recetas", "view"), recetaController.getRecetaById);
+router.get("/producto/:id_producto", auth, checkPermission("recetas", "view"), recetaController.getRecetasByProducto);
+router.get("/completa/:id_producto", auth, checkPermission("recetas", "view"), recetaController.getRecetaCompleta);
 
-// Rutas protegidas solo admin
-router.post("/", auth, role("admin"), recetaController.createReceta);
-router.put("/:id", auth, role("admin"), recetaController.updateReceta);
-router.delete("/:id", auth, role("admin"), recetaController.deleteReceta);
+router.post("/", auth, checkPermission("recetas", "create"), recetaController.createReceta);
+router.put("/:id", auth, checkPermission("recetas", "edit"), recetaController.updateReceta);
+router.delete("/:id", auth, checkPermission("recetas", "delete"), recetaController.deleteReceta);
 
-router.get("/completa/:id_producto", recetaController.getRecetaCompleta);
 module.exports = router;

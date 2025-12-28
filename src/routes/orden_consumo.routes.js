@@ -2,14 +2,15 @@ const { Router } = require("express");
 const router = Router();
 const consumoController = require("../controllers/orden_consumo.controller");
 const auth = require("../middlewares/auth.middleware");
-const { checkPermission } = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
 
-// Rutas protegidas por permisos
-router.get("/", auth, checkPermission("orden_consumo", "view"), consumoController.getOrdenesConsumo);
-router.get("/:id", auth, checkPermission("orden_consumo", "view"), consumoController.getOrdenConsumoById);
+// Rutas públicas
+router.get("/", consumoController.getOrdenesConsumo);
+router.get("/:id", consumoController.getOrdenConsumoById);
 
-router.post("/", auth, checkPermission("orden_consumo", "create"), consumoController.createOrdenConsumo);
-router.put("/:id", auth, checkPermission("orden_consumo", "edit"), consumoController.updateOrdenConsumo);
-router.delete("/:id", auth, checkPermission("orden_consumo", "delete"), consumoController.deleteOrdenConsumo);
+// Rutas protegidas solo admin
+router.post("/", auth, role("admin"), consumoController.createOrdenConsumo);
+router.put("/:id", auth, role("admin"), consumoController.updateOrdenConsumo);
+router.delete("/:id", auth, role("admin"), consumoController.deleteOrdenConsumo);
 
 module.exports = router;

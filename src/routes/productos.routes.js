@@ -1,15 +1,17 @@
 const { Router } = require("express");
 const router = Router();
+
 const productoController = require("../controllers/producto.controller");
 const auth = require("../middlewares/auth.middleware");
-const { checkPermission } = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
 
-// Rutas protegidas por permisos
-router.get("/", auth, checkPermission("productos", "view"), productoController.getProductos);
-router.get("/:id", auth, checkPermission("productos", "view"), productoController.getProductoById);
+// Públicas
+router.get("/", productoController.getProductos);
+router.get("/:id", productoController.getProductoById);
 
-router.post("/", auth, checkPermission("productos", "create"), productoController.createProducto);
-router.put("/:id", auth, checkPermission("productos", "edit"), productoController.updateProducto);
-router.delete("/:id", auth, checkPermission("productos", "delete"), productoController.deleteProducto);
+// Solo admin
+router.post("/", auth, role("admin"), productoController.createProducto);
+router.put("/:id", auth, role("admin"), productoController.updateProducto);
+router.delete("/:id", auth, role("admin"), productoController.deleteProducto);
 
 module.exports = router;

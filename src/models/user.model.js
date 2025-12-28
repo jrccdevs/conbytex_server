@@ -1,52 +1,36 @@
 const db = require('../config/db');
 
-// 🔹 Buscar por email
+// Buscar por email
 exports.findByEmail = async (email) => {
   const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
   return rows[0];
 };
 
-// 🔹 Crear usuario con permisos iniciales granulares
+// Crear usuario con permisos iniciales por defecto
 exports.createUser = async ({ name, email, password, role }) => {
-  let defaultPermissions = {};
-
-  if (role === 'admin') {
-    defaultPermissions = {
-      usuarios: { view: true, create: true, edit: true, delete: true },
-      inventario: { view: true, create: true, edit: true, delete: true },
-      ventas: { view: true, create: true, edit: true, delete: true },
-      reportes: { view: true }
-    };
-  } else {
-    defaultPermissions = {
-      usuarios: { view: false, create: false, edit: false, delete: false },
-      inventario: { view: true, create: false, edit: false, delete: false },
-      ventas: { view: true, create: false, edit: false, delete: false },
-      reportes: { view: false }
-    };
-  }
+  // Definimos permisos iniciales: Admins todo, Users solo lectura de inventario
+  const defaultPermissions = role === 'admin' 
+    ? { usuarios: true, inventario: true, reportes: true, ventas: true } 
+    : { usuarios: false, inventario: true, reportes: false, ventas: false };
 
   const [result] = await db.query(
     "INSERT INTO users (name, email, password, role, permissions) VALUES (?, ?, ?, ?, ?)",
     [name, email, password, role, JSON.stringify(defaultPermissions)]
   );
-
   return result.insertId;
 };
 
-// 🔹 Obtener todos los usuarios (incluye permisos)
+// Obtener usuarios (incluimos permissions)
 exports.getAllUsers = async () => {
   const [rows] = await db.query(
     'SELECT id, name, email, role, permissions, created_at FROM users'
   );
-  return rows.map(user => ({
-    ...user,
-    permissions: JSON.parse(user.permissions || '{}')
-  }));
+  return rows;
 };
 
-// 🔹 Actualizar Rol y/o Permisos
+// Actualizar Rol y/o Permisos
 exports.updateUserRole = async (id, role, permissions) => {
+  // Si enviamos permisos, los actualizamos; si no, solo el rol
   const [result] = await db.query(
     'UPDATE users SET role = ?, permissions = ? WHERE id = ?',
     [role, JSON.stringify(permissions), id]
@@ -54,23 +38,11 @@ exports.updateUserRole = async (id, role, permissions) => {
   return result;
 };
 
-// 🔹 Eliminar usuario
+// Eliminar Usuario
 exports.deleteUser = async (id) => {
   const [result] = await db.query(
     'DELETE FROM users WHERE id = ?',
     [id]
   );
   return result;
-};
-
-// 🔹 Obtener permisos de usuario por ID
-exports.getUserPermissions = async (userId) => {
-  const [rows] = await db.query('SELECT permissions FROM users WHERE id = ?', [userId]);
-  if (!rows[0]) return {};
-
-  try {
-    return JSON.parse(rows[0].permissions);
-  } catch {
-    return {};
-  }
 };

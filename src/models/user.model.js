@@ -1,39 +1,41 @@
 const db = require('../config/db');
 
-// Buscar por email
+// Buscar por email - Ahora hace JOIN para traer el nombre del rol
 exports.findByEmail = async (email) => {
-  const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+  const [rows] = await db.query(`
+    SELECT u.*, r.name as role_name 
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    WHERE u.email = ?
+  `, [email]);
   return rows[0];
 };
 
-// Crear usuario con permisos iniciales por defecto
-exports.createUser = async ({ name, email, password, role }) => {
-  // Definimos permisos iniciales: Admins todo, Users solo lectura de inventario
-  const defaultPermissions = role === 'admin' 
-    ? { usuarios: true, inventario: true, reportes: true, ventas: true } 
-    : { usuarios: false, inventario: true, reportes: false, ventas: false };
-
+// Crear usuario - Ahora usa el ID del rol y no guardamos JSON de permisos
+exports.createUser = async ({ name, email, password, role_id = 2 }) => { 
+  // Nota: role_id = 2 asumiendo que el ID 2 es 'user' o 'editor' según tus inserts
   const [result] = await db.query(
-    "INSERT INTO users (name, email, password, role, permissions) VALUES (?, ?, ?, ?, ?)",
-    [name, email, password, role, JSON.stringify(defaultPermissions)]
+    "INSERT INTO users (name, email, password, role_id) VALUES (?, ?, ?, ?)",
+    [name, email, password, role_id]
   );
   return result.insertId;
 };
 
-// Obtener usuarios (incluimos permissions)
+// Obtener todos los usuarios con su nombre de rol
 exports.getAllUsers = async () => {
-  const [rows] = await db.query(
-    'SELECT id, name, email, role, permissions, created_at FROM users'
-  );
+  const [rows] = await db.query(`
+    SELECT u.id, u.name, u.email, r.name as role, u.created_at 
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+  `);
   return rows;
 };
 
-// Actualizar Rol y/o Permisos
-exports.updateUserRole = async (id, role, permissions) => {
-  // Si enviamos permisos, los actualizamos; si no, solo el rol
+// Actualizar solo el role_id
+exports.updateUserRole = async (id, role_id) => {
   const [result] = await db.query(
-    'UPDATE users SET role = ?, permissions = ? WHERE id = ?',
-    [role, JSON.stringify(permissions), id]
+    'UPDATE users SET role_id = ? WHERE id = ?',
+    [role_id, id]
   );
   return result;
 };

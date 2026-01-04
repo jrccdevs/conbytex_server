@@ -1,31 +1,33 @@
 const User = require('../models/user.model');
 
+// Obtener todos los usuarios con su rol
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.getAllUsers();
-    // Parseamos los permisos de string JSON a objeto JS antes de enviar
-    const usersWithParsedPermissions = users.map(u => ({
-      ...u,
-      permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions
-    }));
-    res.json(usersWithParsedPermissions);
+    
+    // Ya no necesitamos hacer JSON.parse(u.permissions) 
+    // porque el modelo ya nos trae los datos limpios de la DB
+    res.json(users);
   } catch (error) {
     res.status(500).json({ message: "Error al obtener usuarios", error });
   }
 };
 
-// Actualizar Usuario y sus Permisos granulares
+// Actualizar el Rol del usuario
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, permissions } = req.body; 
+    const { role_id } = req.body; // Ahora recibimos el ID numérico del rol
     
-    // Si no vienen permisos en el body, mantenemos la lógica básica
-    await User.updateUserRole(id, role, permissions);
+    if (!role_id) {
+      return res.status(400).json({ message: "El role_id es obligatorio" });
+    }
+
+    await User.updateUserRole(id, role_id);
     
-    res.json({ message: "Privilegios actualizados correctamente" });
+    res.json({ message: "Rol de usuario actualizado correctamente" });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar permisos", error });
+    res.status(500).json({ message: "Error al actualizar el rol", error });
   }
 };
 

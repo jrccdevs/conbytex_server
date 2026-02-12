@@ -8,6 +8,17 @@ exports.getProductos = async (req, res) => {
     res.status(500).json({ message: "Error al obtener productos", error });
   }
 };
+exports.getProductosConReceta = async (req, res) => {
+  try {
+    const productos = await Producto.getConReceta();
+    res.json(productos);
+  } catch (error) {
+    res.status(500).json({ 
+      message: "Error al obtener productos con receta", 
+      error 
+    });
+  }
+};
 
 exports.getProductoById = async (req, res) => {
   try {

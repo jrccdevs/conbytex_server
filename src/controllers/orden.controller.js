@@ -1,32 +1,45 @@
 const Orden = require("../models/orden.model");
 const Receta = require("../models/receta.model");
-const db = require("../config/db"); // Para usar transacciones
+const db = require("../config/db");
 
 exports.updateOrden = async (req, res) => {
   const connection = await db.getConnection();
+
   try {
     const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
     const id_orden = req.params.id;
+
     const estadoNuevo = estado.trim().toLowerCase();
     const cantidad = Number(cantidad_solicitada);
 
+    const ID_ALMACEN_MP = 1; // MATERIA PRIMA
+    const ID_ALMACEN_PT = 2; // PRODUCTO TERMINADO
+
     await connection.beginTransaction();
 
-    // Obtener estado anterior de la orden
+    // 🔹 Obtener estado anterior
     const ordenAnterior = await Orden.getRawById(id_orden, connection);
     if (!ordenAnterior) throw new Error("Orden no encontrada");
+
     const estadoAnterior = ordenAnterior.estado;
 
-    // Actualizar orden
+    // 🔹 Actualizar orden
     await Orden.update(
       id_orden,
       { id_producto, id_empleado, cantidad_solicitada: cantidad, estado: estadoNuevo },
       connection
     );
 
-    // 1️⃣ De pendiente a en_proceso: reservar stock
+    /*
+    =====================================================
+    1️⃣ De pendiente → en_proceso
+       Reservar stock (NO descontar aún)
+    =====================================================
+    */
     if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
+
       const insumos = await Receta.getByProducto(id_producto, connection);
+
       for (const item of insumos) {
         const totalReserva = item.cantidad * cantidad;
 
@@ -36,8 +49,11 @@ exports.updateOrden = async (req, res) => {
         );
 
         const disponible = prod.stock - prod.stock_reservado;
+
         if (disponible < totalReserva) {
-          throw new Error(`Stock insuficiente para materia prima ${item.id_producto_material}`);
+          throw new Error(
+            `Stock insuficiente para materia prima ID ${item.id_producto_material}`
+          );
         }
 
         await connection.query(
@@ -47,19 +63,51 @@ exports.updateOrden = async (req, res) => {
       }
     }
 
-    // 2️⃣ De en_proceso a finalizado: descontar stock y liberar stock_reservado
+    /*
+    =====================================================
+    2️⃣ De en_proceso → completado
+       - Descontar MP (movimiento salida)
+       - Liberar reserva
+       - Ingresar PT (movimiento ingreso)
+    =====================================================
+    */
     if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
+
       const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+
+      // 🔹 Descontar Materia Prima
       for (const item of insumos) {
-        const total = item.cantidad * cantidad;
+
+        const totalMP = item.cantidad * cantidad;
+
+        // Insertar movimiento SALIDA en MP
         await connection.query(
-          "UPDATE productos SET stock = stock - ?, stock_reservado = stock_reservado - ? WHERE id_producto = ?",
-          [total, total, item.id_producto_material]
+          `INSERT INTO movimientos_inventario
+           (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
+           VALUES (?, ?, 'salida', ?, NOW())`,
+          [item.id_producto_material, ID_ALMACEN_MP, totalMP]
+        );
+
+        // Liberar stock reservado
+        await connection.query(
+          `UPDATE productos
+           SET stock_reservado = stock_reservado - ?
+           WHERE id_producto = ?`,
+          [totalMP, item.id_producto_material]
         );
       }
+
+      // 🔹 Ingresar Producto Terminado
+      await connection.query(
+        `INSERT INTO movimientos_inventario
+         (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
+         VALUES (?, ?, 'ingreso', ?, NOW())`,
+        [id_producto, ID_ALMACEN_PT, cantidad]
+      );
     }
 
     await connection.commit();
+
     res.json({ message: "Orden actualizada correctamente" });
 
   } catch (error) {
@@ -70,6 +118,7 @@ exports.updateOrden = async (req, res) => {
   }
 };
 
+
 exports.getOrdenes = async (req, res) => {
   try {
     const ordenes = await Orden.getAll();
@@ -78,6 +127,7 @@ exports.getOrdenes = async (req, res) => {
     res.status(500).json({ message: "Error al obtener órdenes", error });
   }
 };
+
 
 exports.getOrdenById = async (req, res) => {
   try {
@@ -89,18 +139,28 @@ exports.getOrdenById = async (req, res) => {
   }
 };
 
+
 exports.createOrden = async (req, res) => {
   try {
     const { id_producto, id_empleado, cantidad_solicitada } = req.body;
-    if (!id_producto || !id_empleado || !cantidad_solicitada)
-      return res.status(400).json({ message: "Todos los campos son obligatorios" });
 
-    const newOrden = await Orden.create({ id_producto, id_empleado, cantidad_solicitada });
+    if (!id_producto || !id_empleado || !cantidad_solicitada) {
+      return res.status(400).json({ message: "Todos los campos son obligatorios" });
+    }
+
+    const newOrden = await Orden.create({
+      id_producto,
+      id_empleado,
+      cantidad_solicitada
+    });
+
     res.json({ message: "Orden creada", orden: newOrden });
+
   } catch (error) {
     res.status(500).json({ message: "Error al crear la orden", error });
   }
 };
+
 
 exports.deleteOrden = async (req, res) => {
   try {

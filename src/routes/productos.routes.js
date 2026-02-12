@@ -6,6 +6,11 @@ const auth = require("../middlewares/auth.middleware");
 const permission = require("../middlewares/permission.middleware");
 
 // 🔐 TODAS protegidas por permisos
+router.get(
+  "/con-receta", 
+  auth,
+  permission("productos.view"),
+  productoController.getProductosConReceta);
 
 router.get(
   "/",

@@ -107,7 +107,31 @@ const Producto = {
   delete: async (id) => {
     await db.query("DELETE FROM productos WHERE id_producto = ?", [id]);
     return { message: `Producto con id ${id} eliminado` };
+  },
+  getConReceta: async () => {
+    const [rows] = await db.query(`
+    SELECT DISTINCT 
+    p.id_producto,
+    p.tipo_producto,
+    CONCAT(
+        p.nombre_producto,
+        IF(m.nombre_material IS NOT NULL, CONCAT(' - ', m.nombre_material), ''),
+        IF(c.nombre_color IS NOT NULL, CONCAT(' - ', c.nombre_color), '')
+    ) AS nombre_completo,
+    m.nombre_material,
+    c.nombre_color,
+    u.nombre_unidad
+FROM productos p
+INNER JOIN receta r 
+    ON r.id_producto = p.id_producto
+LEFT JOIN materiales m ON p.id_material = m.id_material
+LEFT JOIN color c ON p.id_color = c.id_color
+LEFT JOIN unidadesmedida u ON p.id_unidadmedida = u.id_unidad
+WHERE p.tipo_producto = 'PT'
+    `);
+    return rows;
   }
+
 };
 
 module.exports = Producto;

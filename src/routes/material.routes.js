@@ -2,15 +2,40 @@ const { Router } = require("express");
 const router = Router();
 const materialController = require("../controllers/material.controller");
 const auth = require("../middlewares/auth.middleware");
-const role = require("../middlewares/role.middleware");
 
+const permission = require("../middlewares/permission.middleware");
 // Rutas públicas
-router.get("/", materialController.getMaterials);
-router.get("/:id", materialController.getMaterialById);
+router.get(
+    "/", 
+    auth,
+    permission("material.view"),
+    materialController.getMaterials);
+
+
+router.get(
+    "/:id", 
+    auth,
+    permission("material.view"),
+    materialController.getMaterialById);
 
 // Rutas protegidas solo admin
-router.post("/", auth, role("admin"), materialController.createMaterial);
-router.put("/:id", auth, role("admin"), materialController.updateMaterial);
-router.delete("/:id", auth, role("admin"), materialController.deleteMaterial);
+router.post(
+    "/", 
+    auth, 
+    permission("material.create"),
+    materialController.createMaterial);
+
+router.put(
+    "/:id", 
+    auth, 
+    permission("material.edit"),
+    materialController.updateMaterial);
+
+
+router.delete(
+    "/:id", 
+    auth, 
+    permission("material.delete"),
+    materialController.deleteMaterial);
 
 module.exports = router;

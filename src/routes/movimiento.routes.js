@@ -2,15 +2,41 @@ const { Router } = require("express");
 const router = Router();
 const movimientoController = require("../controllers/movimiento.controller");
 const auth = require("../middlewares/auth.middleware");
-const role = require("../middlewares/role.middleware");
 
+const permission = require("../middlewares/permission.middleware");
 // Rutas públicas o solo lectura (para empleados y admin)
-router.get("/", auth, movimientoController.getMovimientos);
-router.get("/:id", auth, movimientoController.getMovimientoById);
+router.get(
+    "/", 
+    auth, 
+    permission("movimientos.view"),
+    movimientoController.getMovimientos);
+
+
+router.get(
+    "/:id", 
+    auth, 
+    permission("movimientos.view"),
+    movimientoController.getMovimientoById);
 
 // Rutas protegidas solo para administradores
-router.post("/", auth, role("admin"), movimientoController.createMovimiento);
-router.put("/:id", auth, role("admin"), movimientoController.updateMovimiento);
-router.delete("/:id", auth, role("admin"), movimientoController.deleteMovimiento);
+router.post(
+    "/", 
+    auth, 
+    permission("movimientos.create"),
+    movimientoController.createMovimiento);
+
+
+router.put(
+    "/:id", 
+    auth, 
+    permission("movimientos.edit"),
+    movimientoController.updateMovimiento);
+
+router.delete(
+    "/:id", 
+    auth, 
+    permission("movimientos.delete"),
+    movimientoController.deleteMovimiento);
 
 module.exports = router;
+

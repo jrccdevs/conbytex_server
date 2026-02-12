@@ -1,34 +1,59 @@
 const db = require('../config/db');
 
-module.exports = function(requiredPermission) {
+/**
+ * Middleware para verificar permisos por slug
+ * Soporta:
+ *  - Permisos por rol
+ *  - Permisos directos al usuario
+ */
+module.exports = function (requiredPermission) {
   return async (req, res, next) => {
     try {
-      // 1. Verificar que el usuario esté autenticado
-      if (!req.user || !req.user.role_id) {
-        return res.status(401).json({ message: "No autenticado o rol no identificado" });
+      // 1️⃣ Verificar autenticación
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ message: 'No autenticado' });
       }
 
-      // 2. Consultar si el rol del usuario tiene el permiso solicitado
-      // Buscamos el slug del permiso en la tabla intermedia role_permissions
-      const [rows] = await db.query(`
-        SELECT p.slug 
-        FROM permissions p
-        INNER JOIN role_permissions rp ON p.id = rp.permission_id
-        WHERE rp.role_id = ? AND p.slug = ?
-      `, [req.user.role_id, requiredPermission]);
+      const userId = req.user.id;
 
-      // 3. Si no se encuentra el registro, el usuario no tiene ese permiso
+      // 2️⃣ Verificar permiso (ROL o DIRECTO)
+      const [rows] = await db.query(
+        `
+        SELECT 1
+        FROM permissions p
+        WHERE p.slug = ?
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM user_roles ur
+            INNER JOIN role_permissions rp ON ur.role_id = rp.role_id
+            WHERE ur.user_id = ? AND rp.permission_id = p.id
+          )
+          OR
+          EXISTS (
+            SELECT 1
+            FROM user_permissions up
+            WHERE up.user_id = ? AND up.permission_id = p.id
+          )
+        )
+        LIMIT 1
+        `,
+        [requiredPermission, userId, userId]
+      );
+
+      // 3️⃣ Si no tiene permiso → 403
       if (rows.length === 0) {
-        return res.status(403).json({ 
-          message: `No tienes el permiso necesario: [${requiredPermission}]` 
+        return res.status(403).json({
+          message: `No tienes el permiso requerido: ${requiredPermission}`
         });
       }
 
-      // 4. Todo bien, puede pasar
+      // 4️⃣ Permiso OK
       next();
+
     } catch (error) {
-      console.error("Error en permission.middleware:", error);
-      res.status(500).json({ message: "Error interno al verificar permisos" });
+      console.error('PERMISSION MIDDLEWARE ERROR:', error);
+      res.status(500).json({ message: 'Error al verificar permisos' });
     }
   };
 };

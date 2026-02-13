@@ -58,14 +58,16 @@ const Orden = {
     };
   },
 
-  create: async (data) => {
+  create: async (data, connection = db) => {
     const { id_producto, id_empleado, cantidad_solicitada } = data;
-    const [result] = await db.query(
+  
+    const [result] = await connection.query(
       `INSERT INTO orden_produccion 
         (id_producto, id_empleado, cantidad_solicitada)
        VALUES (?, ?, ?)`,
       [id_producto, id_empleado, cantidad_solicitada]
     );
+  
     return { id_orden: result.insertId, ...data, estado: 'pendiente' };
   },
 

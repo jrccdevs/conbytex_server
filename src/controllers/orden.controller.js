@@ -141,6 +141,8 @@ exports.getOrdenById = async (req, res) => {
 
 
 exports.createOrden = async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
     const { id_producto, id_empleado, cantidad_solicitada } = req.body;
 
@@ -148,18 +150,65 @@ exports.createOrden = async (req, res) => {
       return res.status(400).json({ message: "Todos los campos son obligatorios" });
     }
 
+    const cantidad = Number(cantidad_solicitada);
+
+    await connection.beginTransaction();
+
+    // 🔹 Obtener receta
+    const insumos = await Receta.getByProducto(id_producto, connection);
+
+    if (!insumos || insumos.length === 0) {
+      throw new Error("El producto no tiene receta asociada");
+    }
+
+    const erroresStock = [];
+
+    for (const item of insumos) {
+      const totalNecesario = item.cantidad * cantidad;
+
+      const [[prod]] = await connection.query(
+        "SELECT stock, stock_reservado, nombre_producto FROM productos WHERE id_producto = ?",
+        [item.id_producto_material]
+      );
+
+      const disponible = prod.stock - prod.stock_reservado;
+
+      if (disponible < totalNecesario) {
+        erroresStock.push({
+          producto: prod.nombre_producto,
+          necesario: totalNecesario,
+          disponible
+        });
+      }
+    }
+
+    if (erroresStock.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        message: "Stock insuficiente",
+        items: erroresStock
+      });
+    }
+
+    // 🔹 Crear orden si todo está correcto
     const newOrden = await Orden.create({
       id_producto,
       id_empleado,
-      cantidad_solicitada
+      cantidad_solicitada: cantidad
     });
+
+    await connection.commit();
 
     res.json({ message: "Orden creada", orden: newOrden });
 
   } catch (error) {
-    res.status(500).json({ message: "Error al crear la orden", error });
+    await connection.rollback();
+    res.status(500).json({ message: error.message });
+  } finally {
+    connection.release();
   }
 };
+
 
 
 exports.deleteOrden = async (req, res) => {

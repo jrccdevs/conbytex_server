@@ -2,38 +2,42 @@ const Orden = require("../models/orden.model");
 const Receta = require("../models/receta.model");
 const db = require("../config/db");
 
-exports.updateOrden = async (req, res) => {
+const updateOrden = async (req, res) => {
+  const { id } = req.params;
+  const { estado } = req.body;
+
   const connection = await db.getConnection();
 
   try {
-    const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
-    const id_orden = req.params.id;
-
-    const estadoNuevo = estado.trim().toLowerCase();
-    const cantidad = Number(cantidad_solicitada);
-
-    const ID_ALMACEN_MP = 1; // MATERIA PRIMA
-    const ID_ALMACEN_PT = 2; // PRODUCTO TERMINADO
-
     await connection.beginTransaction();
 
-    // 🔹 Obtener estado anterior
-    const ordenAnterior = await Orden.getRawById(id_orden, connection);
-    if (!ordenAnterior) throw new Error("Orden no encontrada");
-
-    const estadoAnterior = ordenAnterior.estado;
-
-    // 🔹 Actualizar orden
-    await Orden.update(
-      id_orden,
-      { id_producto, id_empleado, cantidad_solicitada: cantidad, estado: estadoNuevo },
-      connection
+    // 1️⃣ Obtener orden actual
+    const [ordenRows] = await connection.query(
+      "SELECT * FROM ordenes_produccion WHERE id_orden = ?",
+      [id]
     );
+
+    if (ordenRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Orden no encontrada" });
+    }
+
+    const orden = ordenRows[0];
+    const estadoAnterior = orden.estado;
+    const estadoNuevo = estado;
+    const cantidad = orden.cantidad_solicitada;
+    const id_producto = orden.id_producto;
+
+    // 2️⃣ Si no hay cambio de estado, salir
+    if (estadoAnterior === estadoNuevo) {
+      await connection.rollback();
+      return res.status(400).json({ message: "No hay cambio de estado" });
+    }
 
     /*
     =====================================================
-    1️⃣ De pendiente → en_proceso
-       Reservar stock (NO descontar aún)
+    3️⃣ pendiente → en_proceso
+       Validar y reservar stock
     =====================================================
     */
     if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
@@ -41,23 +45,49 @@ exports.updateOrden = async (req, res) => {
       const insumos = await Receta.getByProducto(id_producto, connection);
 
       for (const item of insumos) {
-        const totalReserva = item.cantidad * cantidad;
 
+        // 🔎 Calcular stock real desde movimientos
         const [[prod]] = await connection.query(
-          "SELECT stock, stock_reservado FROM productos WHERE id_producto = ?",
+          `
+          SELECT 
+              IFNULL(SUM(
+                  CASE 
+                      WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
+                      WHEN m.tipo_movimiento = 'salida' THEN -m.cantidad
+                      WHEN m.tipo_movimiento = 'ajuste' THEN m.cantidad
+                      ELSE 0
+                  END
+              ), 0) AS stock_fisico,
+              IFNULL(p.stock_reservado, 0) AS stock_reservado
+          FROM productos p
+          LEFT JOIN movimientos_inventario m 
+              ON p.id_producto = m.id_producto
+          WHERE p.id_producto = ?
+          GROUP BY p.id_producto, p.stock_reservado
+          `,
           [item.id_producto_material]
         );
 
-        const disponible = prod.stock - prod.stock_reservado;
+        const totalNecesario = item.cantidad * cantidad;
+        const disponible = prod.stock_fisico - prod.stock_reservado;
 
-        if (disponible < totalReserva) {
-          throw new Error(
-            `Stock insuficiente para materia prima ID ${item.id_producto_material}`
-          );
+        if (disponible < totalNecesario) {
+          await connection.rollback();
+          return res.status(400).json({
+            message: `Stock insuficiente para el material ${item.id_producto_material}`
+          });
         }
+      }
+
+      // 🔒 Reservar stock
+      for (const item of insumos) {
+
+        const totalReserva = item.cantidad * cantidad;
 
         await connection.query(
-          "UPDATE productos SET stock_reservado = stock_reservado + ? WHERE id_producto = ?",
+          `UPDATE productos
+           SET stock_reservado = stock_reservado + ?
+           WHERE id_producto = ?`,
           [totalReserva, item.id_producto_material]
         );
       }
@@ -65,46 +95,72 @@ exports.updateOrden = async (req, res) => {
 
     /*
     =====================================================
-    2️⃣ De en_proceso → completado
-       - Descontar MP (movimiento salida)
-       - Liberar reserva
-       - Ingresar PT (movimiento ingreso)
+    4️⃣ en_proceso → completado
+       Descontar físico + liberar reserva + ingresar PT
     =====================================================
     */
     if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
 
-      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+      const insumos = await Receta.getByProducto(id_producto, connection);
 
-      // 🔹 Descontar Materia Prima
       for (const item of insumos) {
 
-        const totalMP = item.cantidad * cantidad;
+        const totalConsumo = item.cantidad * cantidad;
 
-        // Insertar movimiento SALIDA en MP
+        // 📤 Registrar salida de materia prima
         await connection.query(
           `INSERT INTO movimientos_inventario
-           (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
-           VALUES (?, ?, 'salida', ?, NOW())`,
-          [item.id_producto_material, ID_ALMACEN_MP, totalMP]
+           (id_producto, tipo_movimiento, cantidad, motivo)
+           VALUES (?, 'salida', ?, 'Producción completada')`,
+          [item.id_producto_material, totalConsumo]
         );
 
-        // Liberar stock reservado
+        // 🔓 Liberar reserva
         await connection.query(
           `UPDATE productos
-           SET stock_reservado = stock_reservado - ?
+           SET stock_reservado = GREATEST(stock_reservado - ?, 0)
            WHERE id_producto = ?`,
-          [totalMP, item.id_producto_material]
+          [totalConsumo, item.id_producto_material]
         );
       }
 
-      // 🔹 Ingresar Producto Terminado
+      // 📥 Ingresar producto terminado
       await connection.query(
         `INSERT INTO movimientos_inventario
-         (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
-         VALUES (?, ?, 'ingreso', ?, NOW())`,
-        [id_producto, ID_ALMACEN_PT, cantidad]
+         (id_producto, tipo_movimiento, cantidad, motivo)
+         VALUES (?, 'ingreso', ?, 'Producción completada')`,
+        [id_producto, cantidad]
       );
     }
+
+    /*
+    =====================================================
+    5️⃣ en_proceso → cancelado
+       Liberar reserva (sin movimientos físicos)
+    =====================================================
+    */
+    if (estadoAnterior === "en_proceso" && estadoNuevo === "cancelado") {
+
+      const insumos = await Receta.getByProducto(id_producto, connection);
+
+      for (const item of insumos) {
+
+        const totalReserva = item.cantidad * cantidad;
+
+        await connection.query(
+          `UPDATE productos
+           SET stock_reservado = GREATEST(stock_reservado - ?, 0)
+           WHERE id_producto = ?`,
+          [totalReserva, item.id_producto_material]
+        );
+      }
+    }
+
+    // 6️⃣ Actualizar estado
+    await connection.query(
+      "UPDATE ordenes_produccion SET estado = ? WHERE id_orden = ?",
+      [estadoNuevo, id]
+    );
 
     await connection.commit();
 
@@ -112,11 +168,13 @@ exports.updateOrden = async (req, res) => {
 
   } catch (error) {
     await connection.rollback();
-    res.status(500).json({ message: error.message });
+    console.error(error);
+    res.status(500).json({ message: "Error al actualizar la orden" });
   } finally {
     connection.release();
   }
 };
+
 
 
 exports.getOrdenes = async (req, res) => {

@@ -167,12 +167,28 @@ exports.createOrden = async (req, res) => {
       const totalNecesario = item.cantidad * cantidad;
 
       const [[prod]] = await connection.query(
-        "SELECT stock, stock_reservado, nombre_producto FROM productos WHERE id_producto = ?",
+        `
+        SELECT 
+            p.nombre_producto,
+            IFNULL(SUM(
+                CASE 
+                    WHEN m.tipo_movimiento = 'ingreso' THEN m.cantidad 
+                    WHEN m.tipo_movimiento = 'salida' THEN -m.cantidad
+                    WHEN m.tipo_movimiento = 'ajuste' THEN m.cantidad
+                    ELSE 0
+                END
+            ), 0) AS stock_fisico,
+            IFNULL(p.stock_reservado, 0) AS stock_reservado
+        FROM productos p
+        LEFT JOIN movimientos_inventario m 
+            ON p.id_producto = m.id_producto
+        WHERE p.id_producto = ?
+        GROUP BY p.id_producto, p.nombre_producto, p.stock_reservado
+        `,
         [item.id_producto_material]
       );
-
-      const disponible = prod.stock - prod.stock_reservado;
-
+      
+      const disponible = prod.stock_fisico - prod.stock_reservado;
       if (disponible < totalNecesario) {
         erroresStock.push({
           producto: prod.nombre_producto,

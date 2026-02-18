@@ -2,7 +2,7 @@ const Orden = require("../models/orden.model");
 const Receta = require("../models/receta.model");
 const db = require("../config/db");
 
- exports.updateOrden = async (req, res) => {
+exports.updateOrden = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body;
 
@@ -23,12 +23,14 @@ const db = require("../config/db");
     }
 
     const orden = ordenRows[0];
-    const estadoAnterior = orden.estado;
-    const estadoNuevo = estado;
-    const cantidad = orden.cantidad_solicitada;
+
+    const estadoAnterior = orden.estado.trim().toLowerCase();
+    const estadoNuevo = estado.trim().toLowerCase();
+
+    const cantidad = Number(orden.cantidad_solicitada);
     const id_producto = orden.id_producto;
 
-    // 2️⃣ Si no hay cambio de estado, salir
+    // 2️⃣ Si no hay cambio
     if (estadoAnterior === estadoNuevo) {
       await connection.rollback();
       return res.status(400).json({ message: "No hay cambio de estado" });
@@ -37,16 +39,18 @@ const db = require("../config/db");
     /*
     =====================================================
     3️⃣ pendiente → en_proceso
-       Validar y reservar stock
     =====================================================
     */
     if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
 
-      const insumos = await Receta.getByProducto(id_producto, connection);
+      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+
+      if (!insumos || insumos.length === 0) {
+        throw new Error("La receta no tiene insumos definidos");
+      }
 
       for (const item of insumos) {
 
-        // 🔎 Calcular stock real desde movimientos
         const [[prod]] = await connection.query(
           `
           SELECT 
@@ -72,14 +76,13 @@ const db = require("../config/db");
         const disponible = prod.stock_fisico - prod.stock_reservado;
 
         if (disponible < totalNecesario) {
-          await connection.rollback();
-          return res.status(400).json({
-            message: `Stock insuficiente para el material ${item.id_producto_material}`
-          });
+          throw new Error(
+            `Stock insuficiente para materia prima ID ${item.id_producto_material}`
+          );
         }
       }
 
-      // 🔒 Reservar stock
+      // Reservar
       for (const item of insumos) {
 
         const totalReserva = item.cantidad * cantidad;
@@ -96,18 +99,17 @@ const db = require("../config/db");
     /*
     =====================================================
     4️⃣ en_proceso → completado
-       Descontar físico + liberar reserva + ingresar PT
     =====================================================
     */
     if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
 
-      const insumos = await Receta.getByProducto(id_producto, connection);
+      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
 
       for (const item of insumos) {
 
         const totalConsumo = item.cantidad * cantidad;
 
-        // 📤 Registrar salida de materia prima
+        // Movimiento salida MP
         await connection.query(
           `INSERT INTO movimientos_inventario
            (id_producto, tipo_movimiento, cantidad, motivo)
@@ -115,7 +117,7 @@ const db = require("../config/db");
           [item.id_producto_material, totalConsumo]
         );
 
-        // 🔓 Liberar reserva
+        // Liberar reserva
         await connection.query(
           `UPDATE productos
            SET stock_reservado = GREATEST(stock_reservado - ?, 0)
@@ -124,7 +126,7 @@ const db = require("../config/db");
         );
       }
 
-      // 📥 Ingresar producto terminado
+      // Movimiento ingreso PT
       await connection.query(
         `INSERT INTO movimientos_inventario
          (id_producto, tipo_movimiento, cantidad, motivo)
@@ -136,12 +138,11 @@ const db = require("../config/db");
     /*
     =====================================================
     5️⃣ en_proceso → cancelado
-       Liberar reserva (sin movimientos físicos)
     =====================================================
     */
     if (estadoAnterior === "en_proceso" && estadoNuevo === "cancelado") {
 
-      const insumos = await Receta.getByProducto(id_producto, connection);
+      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
 
       for (const item of insumos) {
 
@@ -168,13 +169,12 @@ const db = require("../config/db");
 
   } catch (error) {
     await connection.rollback();
-    console.error(error);
-    res.status(500).json({ message: "Error al actualizar la orden" });
+    console.error("ERROR REAL:", error);
+    res.status(500).json({ message: error.message });
   } finally {
     connection.release();
   }
 };
-
 
 
 exports.getOrdenes = async (req, res) => {
@@ -247,6 +247,7 @@ exports.createOrden = async (req, res) => {
       );
       
       const disponible = prod.stock_fisico - prod.stock_reservado;
+
       if (disponible < totalNecesario) {
         erroresStock.push({
           producto: prod.nombre_producto,

@@ -2,7 +2,7 @@ const Orden = require("../models/orden.model");
 const Receta = require("../models/receta.model");
 const db = require("../config/db");
 
-const updateOrden = async (req, res) => {
+ exports.updateOrden = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body;
 

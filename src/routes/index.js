@@ -2,6 +2,8 @@
 const { Router } = require("express");
 const router = Router();
 
+
+
 router.use("/auth", require("./auth.routes"));
 router.use("/roles", require("./role.routes"));
 
@@ -19,6 +21,8 @@ router.use("/orden-consumo", require("./orden_consumo.routes"));
 router.use("/movimientos", require("./movimiento.routes"));
 router.use("/inventario", require("./inventario.routes"));
 // En server.js
+
+
 
 
 

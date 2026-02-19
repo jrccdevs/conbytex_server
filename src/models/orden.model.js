@@ -11,12 +11,34 @@ const Orden = {
   },
   getAll: async () => {
     const [rows] = await db.query(`
-      SELECT o.*, 
-             p.nombre_producto AS producto_terminado,
-             e.nombre_empleado AS empleado
-      FROM orden_produccion o
-      JOIN productos p ON o.id_producto = p.id_producto
-      JOIN empleados e ON o.id_empleado = e.id_empleado
+    SELECT 
+    o.*, 
+    p.nombre_producto AS producto_terminado,
+    e.nombre_empleado AS empleado,
+
+    -- 🔴 Días de retraso si está completado
+    CASE 
+        WHEN o.estado = 'completado'
+             AND o.fecha_finalizacion IS NOT NULL
+             AND o.fecha_entrega_estimada IS NOT NULL
+             AND o.fecha_finalizacion > o.fecha_entrega_estimada
+        THEN DATEDIFF(o.fecha_finalizacion, o.fecha_entrega_estimada)
+        ELSE 0
+    END AS dias_retraso,
+
+    -- 🟡 Retraso actual si sigue en proceso
+    CASE
+        WHEN o.estado = 'en_proceso'
+             AND o.fecha_entrega_estimada IS NOT NULL
+             AND CURDATE() > o.fecha_entrega_estimada
+        THEN DATEDIFF(CURDATE(), o.fecha_entrega_estimada)
+        ELSE 0
+    END AS retraso_actual
+
+FROM orden_produccion o
+JOIN productos p ON o.id_producto = p.id_producto
+JOIN empleados e ON o.id_empleado = e.id_empleado
+ORDER BY o.id_orden DESC
     `);
     return rows;
   },

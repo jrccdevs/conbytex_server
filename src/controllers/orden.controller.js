@@ -6,7 +6,7 @@ exports.updateOrden = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    const { id_producto, id_empleado, cantidad_solicitada, estado } = req.body;
+    const { id_producto, id_empleado, cantidad_solicitada, estado, fecha_entrega_estimada } = req.body;
     const id_orden = req.params.id;
 
     const estadoNuevo = estado.trim().toLowerCase();
@@ -23,13 +23,6 @@ exports.updateOrden = async (req, res) => {
 
     const estadoAnterior = ordenAnterior.estado;
 
-    // 🔹 Actualizar orden
-    await Orden.update(
-      id_orden,
-      { id_producto, id_empleado, cantidad_solicitada: cantidad, estado: estadoNuevo },
-      connection
-    );
-
     /*
     =====================================================
     1️⃣ De pendiente → en_proceso
@@ -37,6 +30,10 @@ exports.updateOrden = async (req, res) => {
     =====================================================
     */
     if (estadoAnterior === "pendiente" && estadoNuevo === "en_proceso") {
+
+      if (!fecha_entrega_estimada) {
+        throw new Error("Debe ingresar una fecha de entrega estimada");
+      }
 
       const insumos = await Receta.getByProducto(id_producto, connection);
 
@@ -77,6 +74,13 @@ exports.updateOrden = async (req, res) => {
           [totalReserva, item.id_producto_material]
         );
       }
+      await connection.query(
+        `UPDATE orden_produccion
+         SET fecha_inicio = NOW(),
+             fecha_entrega_estimada = ?
+         WHERE id_orden = ?`,
+        [fecha_entrega_estimada, id_orden]
+      );
     }
 
     /*
@@ -118,6 +122,12 @@ exports.updateOrden = async (req, res) => {
          VALUES (?, ?, 'ingreso', ?, NOW())`,
         [id_producto, ID_ALMACEN_PT, cantidad]
       );
+      await connection.query(
+        `UPDATE orden_produccion
+         SET fecha_finalizacion = NOW()
+         WHERE id_orden = ?`,
+        [id_orden]
+      );
     }
 
     /*
@@ -142,6 +152,12 @@ exports.updateOrden = async (req, res) => {
         );
       }
     }
+// 🔹 Actualizar orden al final (una sola vez)
+await Orden.update(
+  id_orden,
+  { id_producto, id_empleado, cantidad_solicitada: cantidad, estado: estadoNuevo },
+  connection
+);
 
     await connection.commit();
 

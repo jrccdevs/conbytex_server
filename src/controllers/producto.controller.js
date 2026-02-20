@@ -32,7 +32,7 @@ exports.getProductoById = async (req, res) => {
 
 exports.createProducto = async (req, res) => {
   try {
-    const required = ["nombre_producto", "tipo_producto", "id_material", "id_unidadmedida"];
+    const required = ["codigo","nombre_producto", "tipo_producto", "id_material", "id_unidadmedida"];
     for (const field of required) {
       if (!req.body[field]) return res.status(400).json({ message: `${field} es obligatorio` });
     }
@@ -40,8 +40,20 @@ exports.createProducto = async (req, res) => {
     const newProducto = await Producto.create(req.body);
     res.json({ message: "Producto creado", producto: newProducto });
   } catch (error) {
-    res.status(500).json({ message: "Error al crear producto", error });
+   // Si el error es el que lanzamos en el modelo
+   if (error.message === "EL_CODIGO_YA_EXISTE") {
+    return res.status(400).json({ 
+      message: "El código ingresado ya pertenece a otro producto. Por favor, usa uno diferente." 
+    });
   }
+  
+  // Si es un error de duplicado de MySQL (por si falla la validación manual)
+  if (error.code === 'ER_DUP_ENTRY') {
+    return res.status(400).json({ message: "Error: El código ya está en uso." });
+  }
+
+  res.status(500).json({ message: "Error al crear producto", error });
+}
 };
 
 exports.updateProducto = async (req, res) => {

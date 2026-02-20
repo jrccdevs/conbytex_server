@@ -1,4 +1,4 @@
-const db = require('../../config/db'); // ajusta si tu ruta es diferente
+const db = require('../../config/db');
 
 exports.getDashboardData = async () => {
 
@@ -13,7 +13,7 @@ exports.getDashboardData = async () => {
     */
     const [rows] = await connection.query(`
       SELECT estado, COUNT(*) as total
-      FROM ordenes_produccion
+      FROM orden_produccion
       GROUP BY estado
     `);
 
@@ -38,14 +38,14 @@ exports.getDashboardData = async () => {
 
     /*
     ==========================================
-    2️⃣ Órdenes completadas hoy
+    2️⃣ Órdenes completadas hoy (CORRECTO)
     ==========================================
     */
     const [hoyRows] = await connection.query(`
       SELECT COUNT(*) as total
       FROM orden_produccion
       WHERE estado = 'completado'
-      AND DATE(fecha) = CURDATE()
+      AND DATE(fecha_finalizacion_real) = CURDATE()
     `);
 
     resumen.completadas_hoy = hoyRows[0].total;

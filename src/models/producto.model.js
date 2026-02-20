@@ -33,9 +33,18 @@ const Producto = {
     `, [id]);
     return rows[0];
   },
-
+// NUEVO MÉTODO PARA VALIDAR
+getByCodigo: async (codigo) => {
+  const [rows] = await db.query("SELECT * FROM productos WHERE codigo = ?", [codigo]);
+  return rows[0];
+},
   create: async (data) => {
+    const existe = await Producto.getByCodigo(data.codigo);
+    if (existe) {
+        throw new Error("EL_CODIGO_YA_EXISTE");
+    }
     const {
+      codigo,
       nombre_producto,
       tipo_producto,
       id_material,
@@ -48,9 +57,10 @@ const Producto = {
 
     const [result] = await db.query(
       `INSERT INTO productos 
-      (nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, stock, stock_minimo, activo)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`, // El stock nace en 0 estrictamente
+      (codigo, nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, stock, stock_minimo, activo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`, // El stock nace en 0 estrictamente
       [
+        codigo,
         nombre_producto, 
         tipo_producto, 
         id_material, 
@@ -67,6 +77,7 @@ const Producto = {
 
   update: async (id, data) => {
     const {
+      codigo,
       nombre_producto,
       tipo_producto,
       id_material,
@@ -79,6 +90,7 @@ const Producto = {
 
     await db.query(
       `UPDATE productos SET 
+        codigo = ?,
         nombre_producto = ?, 
         tipo_producto = ?, 
         id_material = ?, 
@@ -89,6 +101,7 @@ const Producto = {
         activo = ?
        WHERE id_producto = ?`,
       [
+        codigo,
         nombre_producto, 
         tipo_producto, 
         id_material, 
@@ -112,8 +125,10 @@ const Producto = {
     const [rows] = await db.query(`
     SELECT DISTINCT 
     p.id_producto,
+    p.codigo,
     p.tipo_producto,
     CONCAT(
+        ' [', p.codigo, '] ',
         p.nombre_producto,
         IF(m.nombre_material IS NOT NULL, CONCAT(' - ', m.nombre_material), ''),
         IF(c.nombre_color IS NOT NULL, CONCAT(' - ', c.nombre_color), '')

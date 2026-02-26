@@ -11,6 +11,7 @@ const Receta = {
     const [rows] = await db.query(`
       SELECT r.*, 
              p.nombre_producto AS producto_terminado,
+             p.codigo,
              m.nombre_producto AS materia_prima
       FROM receta r
       JOIN productos p ON r.id_producto = p.id_producto
@@ -24,6 +25,7 @@ const Receta = {
     const [rows] = await db.query(`
       SELECT r.*, 
              p.nombre_producto AS producto_terminado,
+             p.codigo,
              m.nombre_producto AS materia_prima
       FROM receta r
       JOIN productos p ON r.id_producto = p.id_producto

@@ -54,32 +54,37 @@ ORDER BY o.id_orden DESC
       JOIN empleados e ON o.id_empleado = e.id_empleado
       WHERE o.id_orden = ?
     `, [id]);
-
+  
     if (rows.length === 0) return null;
-
+  
     const orden = rows[0];
-
-    // Obtener los materiales de la receta para este producto
+  
+    // 🔥 AQUÍ ESTÁ EL AJUSTE
     const [materiales] = await db.query(`
-      SELECT r.id_producto_material, mp.nombre_producto AS materia_prima, r.cantidad
+      SELECT 
+      r.id_producto_material, 
+      mp.codigo,
+      mp.nombre_producto AS materia_prima,
+      mp.costo_unitario,
+      r.cantidad
       FROM receta r
       JOIN productos mp ON r.id_producto_material = mp.id_producto
       WHERE r.id_producto = ?
     `, [orden.id_producto]);
-
-    // Multiplicar la cantidad de cada material por la cantidad solicitada
+  
     const materialesMultiplicados = materiales.map(m => ({
       id_producto_material: m.id_producto_material,
+      codigo: m.codigo, // 👈 nuevo
       materia_prima: m.materia_prima,
+      costo_unitario: m.costo_unitario, // 👈 agregado
       cantidad_necesaria: m.cantidad * orden.cantidad_solicitada
     }));
-
+  
     return {
       ...orden,
       materiales: materialesMultiplicados
     };
   },
-
   create: async (data, connection = db) => {
     const { id_producto, id_empleado, cantidad_solicitada } = data;
   

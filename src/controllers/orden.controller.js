@@ -91,45 +91,64 @@ exports.updateOrden = async (req, res) => {
        - Ingresar PT
     =====================================================
     */
-    if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
+   if (estadoAnterior === "en_proceso" && estadoNuevo === "completado") {
 
-      const insumos = await Receta.getInsumosProduccion(id_producto, connection);
-
-      for (const item of insumos) {
-        const totalMP = item.cantidad * cantidad;
-
-        // Movimiento salida MP
-        await connection.query(
-          `INSERT INTO movimientos_inventario
-           (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
-           VALUES (?, ?, 'salida', ?, NOW())`,
-          [item.id_producto_material, ID_ALMACEN_MP, totalMP]
-        );
-
-        // Liberar reserva
-        await connection.query(
-          `UPDATE productos
-           SET stock_reservado = stock_reservado - ?
-           WHERE id_producto = ?`,
-          [totalMP, item.id_producto_material]
-        );
-      }
-
-      // Movimiento ingreso PT
+    const insumos = await Receta.getInsumosProduccion(id_producto, connection);
+  
+    let costoTotalProduccion = 0;
+  
+    for (const item of insumos) {
+      const totalMP = item.cantidad * cantidad;
+  
+      // 🔹 Obtener costo_unitario de la materia prima
+      const [[mp]] = await connection.query(
+        "SELECT costo_unitario FROM productos WHERE id_producto = ?",
+        [item.id_producto_material]
+      );
+  
+      const costoUnitario = Number(mp.costo_unitario || 0);
+      const costoItem = totalMP * costoUnitario;
+  
+      costoTotalProduccion += costoItem;
+  
+      // Movimiento salida MP
       await connection.query(
         `INSERT INTO movimientos_inventario
          (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
-         VALUES (?, ?, 'ingreso', ?, NOW())`,
-        [id_producto, ID_ALMACEN_PT, cantidad]
+         VALUES (?, ?, 'salida', ?, NOW())`,
+        [item.id_producto_material, ID_ALMACEN_MP, totalMP]
       );
+  
+      // Liberar reserva
       await connection.query(
-        `UPDATE orden_produccion
-         SET fecha_finalizacion = NOW()
-         WHERE id_orden = ?`,
-        [id_orden]
+        `UPDATE productos
+         SET stock_reservado = stock_reservado - ?
+         WHERE id_producto = ?`,
+        [totalMP, item.id_producto_material]
       );
     }
-
+  
+    // 🔹 Calcular costo unitario real del producto terminado
+    const costoUnitarioProduccion = costoTotalProduccion / cantidad;
+  
+    // Movimiento ingreso PT
+    await connection.query(
+      `INSERT INTO movimientos_inventario
+       (id_producto, id_almacen, tipo_movimiento, cantidad, fecha)
+       VALUES (?, ?, 'ingreso', ?, NOW())`,
+      [id_producto, ID_ALMACEN_PT, cantidad]
+    );
+  
+    // 🔹 Guardar costos en la orden
+    await connection.query(
+      `UPDATE orden_produccion
+       SET fecha_finalizacion = NOW(),
+           costo_total_produccion = ?,
+           costo_unitario_produccion = ?
+       WHERE id_orden = ?`,
+      [costoTotalProduccion, costoUnitarioProduccion, id_orden]
+    );
+  }
     /*
     =====================================================
     3️⃣ De en_proceso → cancelado

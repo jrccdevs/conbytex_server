@@ -14,34 +14,99 @@ const Empleado = {
     return rows[0];
   },
 
-  create: async (nombre_empleado, cargo, activo = true, id_usuario = null) => {
-    const [result] = await db.query(
-      "INSERT INTO empleados (nombre_empleado, cargo, activo, id_usuario) VALUES (?, ?, ?, ?)",
-      [nombre_empleado, cargo, activo, id_usuario]
+  create: async (data) => {
+    const {
+      codigo,
+      nombre_empleado,
+      email,
+      telefono,
+      direccion,
+      fecha_nacimiento,
+      cargo,
+      activo = true,
+      id_usuario = null
+    } = data;
+
+    // 🔥 Validar código único
+    const [existe] = await db.query(
+      "SELECT id_empleado FROM empleados WHERE codigo = ?",
+      [codigo]
     );
 
-    return {
-      id_empleado: result.insertId,
-      nombre_empleado,
-      cargo,
-      activo,
-      id_usuario,
-    };
+    if (existe.length > 0) {
+      throw new Error("El código de empleado ya existe");
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO empleados 
+      (codigo, nombre_empleado, email, telefono, direccion, fecha_nacimiento, cargo, activo, id_usuario) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        codigo,
+        nombre_empleado,
+        email,
+        telefono,
+        direccion,
+        fecha_nacimiento,
+        cargo,
+        activo,
+        id_usuario
+      ]
+    );
+
+    return { id_empleado: result.insertId, ...data };
   },
 
-  update: async (id, nombre_empleado, cargo, activo = true, id_usuario = null) => {
-    await db.query(
-      "UPDATE empleados SET nombre_empleado = ?, cargo = ?, activo = ?, id_usuario = ? WHERE id_empleado = ?",
-      [nombre_empleado, cargo, activo, id_usuario, id]
+  update: async (id, data) => {
+    const {
+      codigo,
+      nombre_empleado,
+      email,
+      telefono,
+      direccion,
+      fecha_nacimiento,
+      cargo,
+      activo = true,
+      id_usuario = null
+    } = data;
+
+    // 🔥 Validar código único (excepto el mismo empleado)
+    const [existe] = await db.query(
+      "SELECT id_empleado FROM empleados WHERE codigo = ? AND id_empleado != ?",
+      [codigo, id]
     );
 
-    return {
-      id_empleado: id,
-      nombre_empleado,
-      cargo,
-      activo,
-      id_usuario,
-    };
+    if (existe.length > 0) {
+      throw new Error("El código de empleado ya existe");
+    }
+
+    await db.query(
+      `UPDATE empleados SET 
+        codigo = ?, 
+        nombre_empleado = ?, 
+        email = ?, 
+        telefono = ?, 
+        direccion = ?, 
+        fecha_nacimiento = ?, 
+        cargo = ?, 
+        activo = ?, 
+        id_usuario = ?
+       WHERE id_empleado = ?`,
+      [
+        codigo,
+        nombre_empleado,
+        email,
+        telefono,
+        direccion,
+        fecha_nacimiento,
+        cargo,
+        activo,
+        id_usuario,
+        id
+      ]
+    );
+
+    return { id_empleado: id, ...data };
   },
 
   delete: async (id) => {

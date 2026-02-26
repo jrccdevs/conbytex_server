@@ -34,37 +34,70 @@ exports.createProducto = async (req, res) => {
   try {
     const required = ["codigo","nombre_producto", "tipo_producto", "id_material", "id_unidadmedida"];
     for (const field of required) {
-      if (!req.body[field]) return res.status(400).json({ message: `${field} es obligatorio` });
+      if (!req.body[field]) {
+        return res.status(400).json({ message: `${field} es obligatorio` });
+      }
+    }
+
+    const { tipo_producto, costo_unitario, precio_base } = req.body;
+
+    // 🔎 VALIDACIONES FINANCIERAS
+    if (tipo_producto === "MP" && (costo_unitario === undefined || costo_unitario === null)) {
+      return res.status(400).json({
+        message: "Para productos tipo MP es obligatorio el costo_unitario"
+      });
+    }
+
+    if (tipo_producto === "PT" && (precio_base === undefined || precio_base === null)) {
+      return res.status(400).json({
+        message: "Para productos tipo PT es obligatorio el precio_base"
+      });
     }
 
     const newProducto = await Producto.create(req.body);
     res.json({ message: "Producto creado", producto: newProducto });
-  } catch (error) {
-   // Si el error es el que lanzamos en el modelo
-   if (error.message === "EL_CODIGO_YA_EXISTE") {
-    return res.status(400).json({ 
-      message: "El código ingresado ya pertenece a otro producto. Por favor, usa uno diferente." 
-    });
-  }
-  
-  // Si es un error de duplicado de MySQL (por si falla la validación manual)
-  if (error.code === 'ER_DUP_ENTRY') {
-    return res.status(400).json({ message: "Error: El código ya está en uso." });
-  }
 
-  res.status(500).json({ message: "Error al crear producto", error });
-}
+  } catch (error) {
+
+    if (error.message === "EL_CODIGO_YA_EXISTE") {
+      return res.status(400).json({
+        message: "El código ingresado ya pertenece a otro producto. Por favor, usa uno diferente."
+      });
+    }
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ message: "Error: El código ya está en uso." });
+    }
+
+    res.status(500).json({ message: "Error al crear producto", error });
+  }
 };
 
 exports.updateProducto = async (req, res) => {
   try {
+
+    const { tipo_producto, costo_unitario, precio_base } = req.body;
+
+    // 🔎 VALIDACIONES FINANCIERAS
+    if (tipo_producto === "MP" && (costo_unitario === undefined || costo_unitario === null)) {
+      return res.status(400).json({
+        message: "Para productos tipo MP es obligatorio el costo_unitario"
+      });
+    }
+
+    if (tipo_producto === "PT" && (precio_base === undefined || precio_base === null)) {
+      return res.status(400).json({
+        message: "Para productos tipo PT es obligatorio el precio_base"
+      });
+    }
+
     const updatedProducto = await Producto.update(req.params.id, req.body);
     res.json({ message: "Producto actualizado", producto: updatedProducto });
+
   } catch (error) {
     res.status(500).json({ message: "Error al actualizar producto", error });
   }
 };
-
 exports.deleteProducto = async (req, res) => {
   try {
     const result = await Producto.delete(req.params.id);

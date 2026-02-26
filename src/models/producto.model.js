@@ -38,12 +38,32 @@ getByCodigo: async (codigo) => {
   const [rows] = await db.query("SELECT * FROM productos WHERE codigo = ?", [codigo]);
   return rows[0];
 },
-  create: async (data) => {
-    const existe = await Producto.getByCodigo(data.codigo);
-    if (existe) {
-        throw new Error("EL_CODIGO_YA_EXISTE");
-    }
-    const {
+create: async (data) => {
+  const existe = await Producto.getByCodigo(data.codigo);
+  if (existe) {
+    throw new Error("EL_CODIGO_YA_EXISTE");
+  }
+
+  const {
+    codigo,
+    nombre_producto,
+    tipo_producto,
+    id_material,
+    id_talla,
+    id_color,
+    id_unidadmedida,
+    stock_minimo,
+    activo,
+    costo_unitario,
+    precio_base
+  } = data;
+
+  const [result] = await db.query(
+    `INSERT INTO productos 
+    (codigo, nombre_producto, tipo_producto, id_material, id_talla, id_color, 
+     id_unidadmedida, stock, stock_minimo, activo, costo_unitario, precio_base)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+    [
       codigo,
       nombre_producto,
       tipo_producto,
@@ -51,32 +71,45 @@ getByCodigo: async (codigo) => {
       id_talla,
       id_color,
       id_unidadmedida,
-      stock_minimo, // Nuevo campo
-      activo
-    } = data;
+      stock_minimo ?? 0,
+      activo ?? 1,
+      costo_unitario ?? null,
+      precio_base ?? null
+    ]
+  );
 
-    const [result] = await db.query(
-      `INSERT INTO productos 
-      (codigo, nombre_producto, tipo_producto, id_material, id_talla, id_color, id_unidadmedida, stock, stock_minimo, activo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`, // El stock nace en 0 estrictamente
-      [
-        codigo,
-        nombre_producto, 
-        tipo_producto, 
-        id_material, 
-        id_talla, 
-        id_color, 
-        id_unidadmedida, 
-        stock_minimo ?? 0, 
-        activo ?? 1
-      ]
-    );
+  return { id_producto: result.insertId, ...data, stock: 0 };
+},
+update: async (id, data) => {
+  const {
+    codigo,
+    nombre_producto,
+    tipo_producto,
+    id_material,
+    id_talla,
+    id_color,
+    id_unidadmedida,
+    stock_minimo,
+    activo,
+    costo_unitario,
+    precio_base
+  } = data;
 
-    return { id_producto: result.insertId, ...data, stock: 0 };
-  },
-
-  update: async (id, data) => {
-    const {
+  await db.query(
+    `UPDATE productos SET 
+      codigo = ?,
+      nombre_producto = ?, 
+      tipo_producto = ?, 
+      id_material = ?, 
+      id_talla = ?, 
+      id_color = ?, 
+      id_unidadmedida = ?, 
+      stock_minimo = ?,
+      activo = ?,
+      costo_unitario = ?,
+      precio_base = ?
+     WHERE id_producto = ?`,
+    [
       codigo,
       nombre_producto,
       tipo_producto,
@@ -84,38 +117,16 @@ getByCodigo: async (codigo) => {
       id_talla,
       id_color,
       id_unidadmedida,
-      stock_minimo, // Nuevo campo
-      activo
-    } = data;
+      stock_minimo,
+      activo,
+      costo_unitario ?? null,
+      precio_base ?? null,
+      id
+    ]
+  );
 
-    await db.query(
-      `UPDATE productos SET 
-        codigo = ?,
-        nombre_producto = ?, 
-        tipo_producto = ?, 
-        id_material = ?, 
-        id_talla = ?, 
-        id_color = ?, 
-        id_unidadmedida = ?, 
-        stock_minimo = ?,
-        activo = ?
-       WHERE id_producto = ?`,
-      [
-        codigo,
-        nombre_producto, 
-        tipo_producto, 
-        id_material, 
-        id_talla, 
-        id_color, 
-        id_unidadmedida, 
-        stock_minimo, 
-        activo, 
-        id
-      ]
-    );
-
-    return { id_producto: id, ...data };
-  },
+  return { id_producto: id, ...data };
+},
 
   delete: async (id) => {
     await db.query("DELETE FROM productos WHERE id_producto = ?", [id]);

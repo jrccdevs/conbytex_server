@@ -25,46 +25,37 @@ exports.getEmpleadoById = async (req, res) => {
 // Crear empleado
 exports.createEmpleado = async (req, res) => {
   try {
-    const { nombre_empleado, cargo, activo, id_usuario } = req.body;
+    const { codigo, nombre_empleado } = req.body;
 
-    if (!nombre_empleado)
-      return res.status(400).json({ message: "nombre_empleado es obligatorio" });
+    if (!codigo || !nombre_empleado)
+      return res.status(400).json({ message: "codigo y nombre_empleado son obligatorios" });
 
-    const newEmpleado = await Empleado.create(
-      nombre_empleado,
-      cargo,
-      activo ?? true,
-      id_usuario || null
-    );
+    const newEmpleado = await Empleado.create(req.body);
 
     res.json({ message: "Empleado creado", empleado: newEmpleado });
   } catch (error) {
-    res.status(500).json({ message: "Error al crear el empleado", error });
+    res.status(400).json({ message: error.message });
   }
 };
 
 // Actualizar empleado
 exports.updateEmpleado = async (req, res) => {
   try {
-    const { nombre_empleado, cargo, activo, id_usuario } = req.body;
+    const { codigo, nombre_empleado } = req.body;
 
-    if (!nombre_empleado)
-      return res.status(400).json({ message: "nombre_empleado es obligatorio" });
+    if (!codigo || !nombre_empleado)
+      return res.status(400).json({ message: "codigo y nombre_empleado son obligatorios" });
 
     const updatedEmpleado = await Empleado.update(
       req.params.id,
-      nombre_empleado,
-      cargo,
-      activo ?? true,
-      id_usuario || null
+      req.body
     );
 
     res.json({ message: "Empleado actualizado", empleado: updatedEmpleado });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar el empleado", error });
+    res.status(400).json({ message: error.message });
   }
 };
-
 // Eliminar empleado
 exports.deleteEmpleado = async (req, res) => {
   try {

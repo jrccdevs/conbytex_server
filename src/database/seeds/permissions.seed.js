@@ -87,6 +87,11 @@ const permissions = [
    { name: "Crear unidad", slug: "unidad.create" },
    { name: "Editar unidad", slug: "unidad.edit" },
    { name: "Eliminar unidad", slug: "unidad.delete" },
+   //CLIENTES
+   { name: "Ver Clientes", slug: "clientes.view" },
+   { name: "Crear Clientes", slug: "clientes.create" },
+   { name: "Editar Clientes", slug: "clientes.edit" },
+   { name: "Eliminar Clientes", slug: "clientes.delete" },
 
 ];
 

@@ -5,9 +5,11 @@ const Inventario = {
         const sql = `
             SELECT 
                 p.id_producto,
+                p.codigo,
                 p.nombre_producto,
                 mat.nombre_material,
                 col.nombre_color,
+                t.nombre_talla,
                 p.tipo_producto,
                 u.nombre_unidad,
 
@@ -52,6 +54,9 @@ const Inventario = {
             LEFT JOIN color col 
                 ON p.id_color = col.id_color
 
+            LEFT JOIN sizes t
+                ON p.id_talla = t.id_talla
+
             LEFT JOIN unidadesmedida u 
                 ON p.id_unidadmedida = u.id_unidad 
 
@@ -63,9 +68,11 @@ const Inventario = {
 
             GROUP BY 
                 p.id_producto,
+                p.codigo,
                 p.nombre_producto,
                 mat.nombre_material,
                 col.nombre_color,
+                t.nombre_talla,
                 p.tipo_producto, 
                 u.nombre_unidad,
                 p.stock_reservado

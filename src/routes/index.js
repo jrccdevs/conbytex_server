@@ -22,7 +22,7 @@ router.use("/movimientos", require("./movimiento.routes"));
 router.use("/inventario", require("./inventario.routes"));
 // En server.js
 router.use("/clientes", require("./cliente.routes"));
-
+router.use("/dashboard", require("./dashboard.routes"));
 
 
 
